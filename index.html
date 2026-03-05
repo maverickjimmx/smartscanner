@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEURAL SCANNER | GLM-OCR</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #0a0a0c; color: #00ffcc; font-family: 'Courier New', monospace; overflow: hidden; }
+        .neon-border { border: 1px solid #00ffcc; box-shadow: 0 0 10px #00ffcc; }
+        .neon-text { text-shadow: 0 0 5px #00ffcc; }
+        
+        /* Scanning Laser Animation */
+        .scanline {
+            width: 100%; height: 2px; background: rgba(0, 255, 204, 0.7);
+            position: absolute; top: 0; left: 0; z-index: 10;
+            box-shadow: 0 0 15px #00ffcc;
+            animation: scan 3s linear infinite;
+            display: none;
+        }
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+
+        /* Reticle */
+        .reticle {
+            position: absolute; top: 50%; left: 50%; width: 250px; height: 150px;
+            transform: translate(-50%, -50%); border: 2px solid rgba(0, 255, 204, 0.3);
+            pointer-events: none;
+        }
+        .corner { position: absolute; width: 20px; height: 20px; border: 2px solid #00ffcc; }
+        .tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
+        .tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; }
+        .bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; }
+        .br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+
+        #camera-feed { width: 100%; height: 100vh; object-fit: cover; }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-between h-screen p-4">
+
+    <div class="w-full flex justify-between text-xs neon-text opacity-70 z-20">
+        <div>SYS_ACTIVE: GLM-OCR_v0.9B</div>
+        <div id="status">STATUS: STANDBY</div>
+    </div>
+
+    <div class="relative w-full flex-grow my-4 overflow-hidden neon-border bg-black">
+        <video id="camera-feed" autoplay playsinline muted></video>
+        <div id="laser" class="scanline"></div>
+        
+        <div class="reticle">
+            <div class="corner tl"></div><div class="corner tr"></div>
+            <div class="corner bl"></div><div class="corner br"></div>
+        </div>
+    </div>
+
+    <div class="w-full flex flex-col items-center gap-4 z-20">
+        <div id="results-preview" class="hidden w-full p-2 bg-black/80 border border-teal-900 text-[10px] max-h-32 overflow-y-auto mb-2">
+            </div>
+
+        <div class="flex gap-4 w-full">
+            <button id="capture-btn" class="flex-grow py-4 bg-teal-900/30 border border-teal-400 font-bold hover:bg-teal-400 hover:text-black transition-all">
+                INITIATE SCAN
+            </button>
+            <button id="download-btn" class="hidden px-6 py-4 bg-white/10 border border-white/20 text-white font-bold opacity-50">
+                GET PDF
+            </button>
+        </div>
+    </div>
+
+    <canvas id="capture-canvas" class="hidden"></canvas>
+
+    <script>
+        const video = document.getElementById('camera-feed');
+        const canvas = document.getElementById('capture-canvas');
+        const statusText = document.getElementById('status');
+        const laser = document.getElementById('laser');
+        const captureBtn = document.getElementById('capture-btn');
+        const preview = document.getElementById('results-preview');
+
+        // Setup Local API Endpoint (Tailscale/Cloudflare URL)
+        const LOCAL_API = "http://YOUR_LOCAL_IP:5002/scan"; 
+
+        // 1. Access Camera
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                statusText.innerText = "ERROR: CAMERA_DENIED";
+            }
+        }
+
+        // 2. Capture and Send to AI
+        captureBtn.onclick = async () => {
+            statusText.innerText = "STATUS: PROCESSING...";
+            laser.style.display = "block";
+            captureBtn.disabled = true;
+
+            // Draw frame to canvas
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+
+            // Convert to Blob
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('file', blob, 'scan.jpg');
+
+                try {
+                    const response = await fetch(LOCAL_API, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+
+                    if (data.status === "success") {
+                        statusText.innerText = "STATUS: COMPLETE";
+                        preview.classList.remove('hidden');
+                        preview.innerText = data.content;
+                        // Logic to save file locally handled by backend
+                        alert(`Saved to Lab: ${data.file}`);
+                    }
+                } catch (err) {
+                    statusText.innerText = "ERROR: BACKEND_OFFLINE";
+                    console.error(err);
+                } finally {
+                    laser.style.display = "none";
+                    captureBtn.disabled = false;
+                }
+            }, 'image/jpeg', 0.9);
+        };
+
+        window.onload = startCamera;
+    </script>
+</body>
+</html>
