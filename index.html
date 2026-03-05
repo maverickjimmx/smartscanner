@@ -6,7 +6,7 @@
     <title>NEURAL SCANNER | GLM-OCR</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #0a0a0c; color: #00ffcc; font-family: 'Courier New', monospace; overflow: hidden; }
+        body { background: #0a0a0c; color: #00ffcc; font-family: 'Courier New', monospace; overflow: auto; }
         .neon-border { border: 1px solid #00ffcc; box-shadow: 0 0 10px #00ffcc; }
         .neon-text { text-shadow: 0 0 5px #00ffcc; }
         
@@ -69,69 +69,68 @@
     <canvas id="capture-canvas" class="hidden"></canvas>
 
     <script>
-        const video = document.getElementById('camera-feed');
-        const canvas = document.getElementById('capture-canvas');
-        const statusText = document.getElementById('status');
-        const laser = document.getElementById('laser');
-        const captureBtn = document.getElementById('capture-btn');
-        const preview = document.getElementById('results-preview');
+    const video = document.getElementById('camera-feed');
+    const canvas = document.getElementById('capture-canvas');
+    const statusText = document.getElementById('status');
+    const laser = document.getElementById('laser');
+    const captureBtn = document.getElementById('capture-btn');
+    const preview = document.getElementById('results-preview');
 
-        // Setup Local API Endpoint (Tailscale/Cloudflare URL)
-        const LOCAL_API = "http://YOUR_LOCAL_IP:5002/scan"; 
+    // Update this one line with your current Cloudflare Link
+    const API_URL = "https://deliver-hip-incidence-dash.trycloudflare.com/scan"; 
 
-        // 1. Access Camera
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
-                });
-                video.srcObject = stream;
-            } catch (err) {
-                statusText.innerText = "ERROR: CAMERA_DENIED";
-            }
+    async function startCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            statusText.innerText = "ERROR: CAMERA_DENIED";
         }
+    }
 
-        // 2. Capture and Send to AI
-        captureBtn.onclick = async () => {
-            statusText.innerText = "STATUS: PROCESSING...";
-            laser.style.display = "block";
-            captureBtn.disabled = true;
+    captureBtn.onclick = async () => {
+        statusText.innerText = "STATUS: PROCESSING...";
+        laser.style.display = "block";
+        captureBtn.disabled = true;
 
-            // Draw frame to canvas
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
 
-            // Convert to Blob
-            canvas.toBlob(async (blob) => {
-                const formData = new FormData();
-                formData.append('file', blob, 'scan.jpg');
+        canvas.toBlob(async (blob) => {
+            const formData = new FormData();
+            formData.append('file', blob, 'scan.jpg');
 
-                try {
-                    const response = await fetch(https://deliver-hip-incidence-dash.trycloudflare.com, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    const data = await response.json();
+            try {
+                // Using the API_URL variable we defined at the top
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) throw new Error("Server Error");
 
-                    if (data.status === "success") {
-                        statusText.innerText = "STATUS: COMPLETE";
-                        preview.classList.remove('hidden');
-                        preview.innerText = data.content;
-                        // Logic to save file locally handled by backend
-                        alert(`Saved to Lab: ${data.file}`);
-                    }
-                } catch (err) {
-                    statusText.innerText = "ERROR: BACKEND_OFFLINE";
-                    console.error(err);
-                } finally {
-                    laser.style.display = "none";
-                    captureBtn.disabled = false;
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    statusText.innerText = "STATUS: COMPLETE";
+                    preview.classList.remove('hidden');
+                    preview.innerText = data.content;
+                    alert(`Saved to Lab: ${data.file}`);
                 }
-            }, 'image/jpeg', 0.9);
-        };
+            } catch (err) {
+                statusText.innerText = "ERROR: BACKEND_OFFLINE";
+                console.error(err);
+            } finally {
+                laser.style.display = "none";
+                captureBtn.disabled = false;
+            }
+        }, 'image/jpeg', 0.9);
+    };
 
-        window.onload = startCamera;
-    </script>
+    window.onload = startCamera;
+</script>
 </body>
 </html>
